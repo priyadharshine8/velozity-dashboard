@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PM
+  DEVELOPER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model User {
+  id              Int            @id @default(autoincrement())
+  name            String
+  email           String         @unique
+  password        String
+  role            Role
+  createdAt       DateTime       @default(now())
+  projectsCreated Project[]
+  tasksAssigned   Task[]
+  activityLogs    ActivityLog[]
+  notifications   Notification[]
+}
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdById Int
+  createdBy   User   @relation(fields: [createdById], references: [id])
+  tasks       Task[]
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?
+
+  projectId Int
+  project   Project @relation(fields: [projectId], references: [id])
+
+  assignedToId Int?
+  assignedTo   User? @relation(fields: [assignedToId], references: [id])
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+}
+
+model ActivityLog {
+  id        Int         @id @default(autoincrement())
+  taskId    Int
+  actorId   Int
+  oldStatus TaskStatus?
+  newStatus TaskStatus
+  createdAt DateTime    @default(now())
+
+  task  Task @relation(fields: [taskId], references: [id])
+  actor User @relation(fields: [actorId], references: [id])
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  taskId    Int
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  task Task @relation(fields: [taskId], references: [id])
+}
