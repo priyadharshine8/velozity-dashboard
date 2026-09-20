@@ -8,8 +8,13 @@ const app = express();
 
 const PORT = process.env.PORT || 5000;
 
-const OLLAMA_URL = "http://127.0.0.1:11434";
-const OLLAMA_MODEL = "qwen3-vl:4b-instruct";
+// ======================================================
+// HUGGING FACE CONFIGURATION
+// ======================================================
+
+const HF_MODEL = "Qwen/Qwen3-VL-4B-Instruct";
+const HF_API_URL =
+    "https://router.huggingface.co/v1/chat/completions";
 
 // ======================================================
 // BASIC MIDDLEWARE
@@ -23,171 +28,235 @@ app.use(express.urlencoded({ extended: true }));
 // UPLOAD FOLDER
 // ======================================================
 
-const uploadDir = path.join(__dirname, "uploads");
+const uploadDir =
+    path.join(__dirname, "uploads");
 
 if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
+    fs.mkdirSync(uploadDir, {
+        recursive: true
+    });
 }
 
 // ======================================================
 // MULTER CONFIGURATION
 // ======================================================
 
-const storage = multer.diskStorage({
+const storage =
+    multer.diskStorage({
 
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
+        destination: (req, file, cb) => {
 
-    filename: (req, file, cb) => {
+            cb(
+                null,
+                uploadDir
+            );
 
-        const extension = path.extname(file.originalname);
+        },
 
-        const uniqueName =
-            Date.now() +
-            "-" +
-            Math.round(Math.random() * 1000000) +
-            extension;
+        filename: (req, file, cb) => {
 
-        cb(null, uniqueName);
-    }
-});
+            const extension =
+                path.extname(
+                    file.originalname
+                );
 
-const upload = multer({
+            const uniqueName =
+                Date.now() +
+                "-" +
+                Math.round(
+                    Math.random() * 1000000
+                ) +
+                extension;
 
-    storage: storage,
+            cb(
+                null,
+                uniqueName
+            );
 
-    limits: {
-        files: 10,
-        fileSize: 10 * 1024 * 1024
-    },
-
-    fileFilter: (req, file, cb) => {
-
-        if (file.mimetype && file.mimetype.startsWith("image/")) {
-            cb(null, true);
-        } else {
-            cb(new Error("Only image files are allowed."));
         }
-    }
-});
+
+    });
+
+const upload =
+    multer({
+
+        storage: storage,
+
+        limits: {
+
+            files: 10,
+
+            fileSize:
+                10 * 1024 * 1024
+
+        },
+
+        fileFilter:
+            (req, file, cb) => {
+
+                if (
+                    file.mimetype &&
+                    file.mimetype.startsWith(
+                        "image/"
+                    )
+                ) {
+
+                    cb(
+                        null,
+                        true
+                    );
+
+                } else {
+
+                    cb(
+                        new Error(
+                            "Only image files are allowed."
+                        )
+                    );
+
+                }
+
+            }
+
+    });
 
 // ======================================================
 // HOME
 // ======================================================
 
-app.get("/", (req, res) => {
-
-    res.json({
-        message: "Velozity Dashboard API is running",
-        status: "OK",
-        vision_model: OLLAMA_MODEL
-    });
-
-});
-
-// ======================================================
-// OLLAMA HEALTH CHECK
-// ======================================================
-
-app.get("/ollama-test", async (req, res) => {
-
-    try {
-
-        const response = await fetch(
-            `${OLLAMA_URL}/api/tags`
-        );
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Ollama returned HTTP ${response.status}`
-            );
-        }
-
-        const data = await response.json();
-
-        const models = (data.models || []).map(
-            model => model.name
-        );
+app.get(
+    "/",
+    (req, res) => {
 
         res.json({
 
-            connected: true,
+            message:
+                "Velozity Dashboard API is running",
 
-            ollama_url: OLLAMA_URL,
+            status:
+                "OK",
 
-            model_required: OLLAMA_MODEL,
-
-            available_models: models,
-
-            model_available:
-                models.includes(OLLAMA_MODEL)
-
-        });
-
-    } catch (error) {
-
-        console.error(
-            "Ollama connection error:",
-            error
-        );
-
-        res.status(500).json({
-
-            connected: false,
-
-            ollama_url: OLLAMA_URL,
-
-            model_required: OLLAMA_MODEL,
-
-            error: error.message
+            vision_model:
+                HF_MODEL
 
         });
 
     }
+);
 
-});
+// ======================================================
+// HUGGING FACE HEALTH CHECK
+// ======================================================
+
+app.get(
+    "/vision-test",
+    async (req, res) => {
+
+        try {
+
+            if (
+                !process.env.HF_TOKEN
+            ) {
+
+                return res.status(500).json({
+
+                    connected:
+                        false,
+
+                    error:
+                        "HF_TOKEN environment variable is not configured on the server."
+
+                });
+
+            }
+
+            res.json({
+
+                connected:
+                    true,
+
+                provider:
+                    "Hugging Face",
+
+                model:
+                    HF_MODEL,
+
+                message:
+                    "Hugging Face configuration is available."
+
+            });
+
+        } catch (error) {
+
+            console.error(
+                "Vision health check error:",
+                error
+            );
+
+            res.status(500).json({
+
+                connected:
+                    false,
+
+                error:
+                    error.message
+
+            });
+
+        }
+
+    }
+);
 
 // ======================================================
 // DATABASE TEST
 // ======================================================
 
-app.get("/db-test", async (req, res) => {
+app.get(
+    "/db-test",
+    async (req, res) => {
 
-    try {
+        try {
 
-        const prisma = require("./src/prisma");
+            const prisma =
+                require("./src/prisma");
 
-        const users = await prisma.user.findMany();
+            const users =
+                await prisma.user.findMany();
 
-        res.json({
-            connected: true,
-            users
-        });
+            res.json({
 
-    } catch (error) {
+                connected:
+                    true,
 
-        console.error(
-            "Database error:",
-            error
-        );
+                users
 
-        res.status(500).json({
+            });
 
-            connected: false,
+        } catch (error) {
 
-            message:
-                "Database connection failed",
+            console.error(
+                "Database error:",
+                error
+            );
 
-            error:
-                error.message
+            res.status(500).json({
 
-        });
+                connected:
+                    false,
+
+                message:
+                    "Database connection failed",
+
+                error:
+                    error.message
+
+            });
+
+        }
 
     }
-
-});
+);
 
 // ======================================================
 // QWEN3-VL IMAGE ANALYSIS
@@ -201,8 +270,27 @@ async function analyzeImageWithQwen(
 
     try {
 
-        console.log("Reading image:");
-        console.log(imagePath);
+        console.log(
+            "Reading image:"
+        );
+
+        console.log(
+            imagePath
+        );
+
+        // --------------------------------------------------
+        // CHECK HF TOKEN
+        // --------------------------------------------------
+
+        if (
+            !process.env.HF_TOKEN
+        ) {
+
+            throw new Error(
+                "HF_TOKEN is not configured on the server."
+            );
+
+        }
 
         // --------------------------------------------------
         // VALIDATE IMAGE PATH
@@ -224,7 +312,9 @@ async function analyzeImageWithQwen(
         // --------------------------------------------------
 
         const resolvedImagePath =
-            path.resolve(imagePath);
+            path.resolve(
+                imagePath
+            );
 
         console.log(
             "Resolved image path:"
@@ -238,7 +328,11 @@ async function analyzeImageWithQwen(
         // CHECK IMAGE EXISTS
         // --------------------------------------------------
 
-        if (!fs.existsSync(resolvedImagePath)) {
+        if (
+            !fs.existsSync(
+                resolvedImagePath
+            )
+        ) {
 
             throw new Error(
                 `Image file does not exist: ${resolvedImagePath}`
@@ -255,7 +349,10 @@ async function analyzeImageWithQwen(
                 resolvedImagePath
             );
 
-        if (!imageBuffer || imageBuffer.length === 0) {
+        if (
+            !imageBuffer ||
+            imageBuffer.length === 0
+        ) {
 
             throw new Error(
                 "Image file is empty."
@@ -272,7 +369,48 @@ async function analyzeImageWithQwen(
         // --------------------------------------------------
 
         const base64Image =
-            imageBuffer.toString("base64");
+            imageBuffer.toString(
+                "base64"
+            );
+
+        // --------------------------------------------------
+        // DETERMINE MIME TYPE
+        // --------------------------------------------------
+
+        const extension =
+            path.extname(
+                resolvedImagePath
+            )
+                .toLowerCase();
+
+        let mimeType =
+            "image/jpeg";
+
+        if (
+            extension === ".png"
+        ) {
+
+            mimeType =
+                "image/png";
+
+        } else if (
+            extension === ".webp"
+        ) {
+
+            mimeType =
+                "image/webp";
+
+        } else if (
+            extension === ".gif"
+        ) {
+
+            mimeType =
+                "image/gif";
+
+        }
+
+        const imageDataUrl =
+            `data:${mimeType};base64,${base64Image}`;
 
         // --------------------------------------------------
         // PROMPT
@@ -354,74 +492,112 @@ Rules:
 `;
 
         // --------------------------------------------------
-        // SEND IMAGE TO OLLAMA
+        // SEND IMAGE TO HUGGING FACE
         // --------------------------------------------------
 
         console.log(
-            `Sending image to ${OLLAMA_MODEL}...`
+            `Sending image to ${HF_MODEL}...`
         );
 
         const controller =
             new AbortController();
 
         const timeout =
-            setTimeout(() => {
+            setTimeout(
+                () => {
 
-                controller.abort();
+                    controller.abort();
 
-            }, 180000);
+                },
+                180000
+            );
 
         let response;
 
         try {
 
-            response = await fetch(
-                `${OLLAMA_URL}/api/chat`,
-                {
+            response =
+                await fetch(
+                    HF_API_URL,
+                    {
 
-                    method: "POST",
+                        method:
+                            "POST",
 
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
+                        headers: {
 
-                    body: JSON.stringify({
+                            "Authorization":
+                                `Bearer ${process.env.HF_TOKEN}`,
 
-                        model: OLLAMA_MODEL,
+                            "Content-Type":
+                                "application/json"
 
-                        messages: [
-                            {
-                                role: "user",
+                        },
 
-                                content: prompt,
+                        body:
+                            JSON.stringify({
 
-                                images: [
-                                    base64Image
-                                ]
-                            }
-                        ],
+                                model:
+                                    HF_MODEL,
 
-                        stream: false,
+                                messages: [
 
-                        format: "json",
+                                    {
 
-                        options: {
-                            temperature: 0,
-                            num_predict: 150
-                        }
+                                        role:
+                                            "user",
 
-                    }),
+                                        content: [
 
-                    signal:
-                        controller.signal
+                                            {
 
-                }
-            );
+                                                type:
+                                                    "text",
+
+                                                text:
+                                                    prompt
+
+                                            },
+
+                                            {
+
+                                                type:
+                                                    "image_url",
+
+                                                image_url: {
+
+                                                    url:
+                                                        imageDataUrl
+
+                                                }
+
+                                            }
+
+                                        ]
+
+                                    }
+
+                                ],
+
+                                temperature:
+                                    0,
+
+                                max_tokens:
+                                    150
+
+                            }),
+
+                        signal:
+                            controller.signal
+
+                    }
+                );
 
         } finally {
 
-            clearTimeout(timeout);
+            clearTimeout(
+                timeout
+            );
 
         }
 
@@ -429,38 +605,43 @@ Rules:
         // HTTP ERROR
         // --------------------------------------------------
 
-        if (!response.ok) {
+        if (
+            !response.ok
+        ) {
 
             const errorText =
                 await response.text();
 
             throw new Error(
-                `Ollama HTTP ${response.status}: ${errorText}`
+                `Hugging Face HTTP ${response.status}: ${errorText}`
             );
 
         }
 
         // --------------------------------------------------
-        // READ OLLAMA RESPONSE
+        // READ HUGGING FACE RESPONSE
         // --------------------------------------------------
 
         const data =
             await response.json();
 
+        const content =
+            data &&
+            data.choices &&
+            data.choices[0] &&
+            data.choices[0].message &&
+            data.choices[0].message.content;
+
         if (
-            !data ||
-            !data.message ||
-            typeof data.message.content !== "string"
+            typeof content !== "string" ||
+            content.trim() === ""
         ) {
 
             throw new Error(
-                "Ollama returned an empty response."
+                "Hugging Face returned an empty response."
             );
 
         }
-
-        const content =
-            data.message.content.trim();
 
         // --------------------------------------------------
         // PRINT QWEN RESPONSE
@@ -480,7 +661,9 @@ Rules:
             "===================================="
         );
 
-        console.log(content);
+        console.log(
+            content.trim()
+        );
 
         console.log(
             "===================================="
@@ -489,7 +672,7 @@ Rules:
         console.log("");
 
         return parseQwenJson(
-            content,
+            content.trim(),
             objectType
         );
 
@@ -509,30 +692,42 @@ Rules:
 
         return {
 
-            analysis_ok: false,
+            analysis_ok:
+                false,
 
-            object_match: null,
+            object_match:
+                null,
 
-            observed_object: "unknown",
+            observed_object:
+                "unknown",
 
-            damage_visible: null,
+            damage_visible:
+                null,
 
-            damage_type: "unknown",
+            damage_type:
+                "unknown",
 
-            damaged_part: "unknown",
+            damaged_part:
+                "unknown",
 
-            severity: "unknown",
+            severity:
+                "unknown",
 
-            view_type: "unknown",
+            view_type:
+                "unknown",
 
-            confidence: 0,
+            confidence:
+                0,
 
             description:
                 "Image analysis could not be completed.",
 
             analysis_error:
-                error.name === "AbortError"
+                error.name ===
+                "AbortError"
+
                     ? "Qwen image analysis timed out after 180 seconds."
+
                     : error.message
 
         };
@@ -553,7 +748,9 @@ function parseQwenJson(
     try {
 
         const parsed =
-            JSON.parse(content);
+            JSON.parse(
+                content
+            );
 
         return normalizeAnalysis(
             parsed,
@@ -571,9 +768,13 @@ function parseQwenJson(
         // --------------------------------------------------
 
         const match =
-            content.match(/\{[\s\S]*\}/);
+            content.match(
+                /\{[\s\S]*\}/
+            );
 
-        if (match) {
+        if (
+            match
+        ) {
 
             try {
 
@@ -599,23 +800,32 @@ function parseQwenJson(
 
         return {
 
-            analysis_ok: false,
+            analysis_ok:
+                false,
 
-            object_match: null,
+            object_match:
+                null,
 
-            observed_object: "unknown",
+            observed_object:
+                "unknown",
 
-            damage_visible: null,
+            damage_visible:
+                null,
 
-            damage_type: "unknown",
+            damage_type:
+                "unknown",
 
-            damaged_part: "unknown",
+            damaged_part:
+                "unknown",
 
-            severity: "unknown",
+            severity:
+                "unknown",
 
-            view_type: "unknown",
+            view_type:
+                "unknown",
 
-            confidence: 0,
+            confidence:
+                0,
 
             description:
                 "The vision model returned an invalid response.",
@@ -640,7 +850,8 @@ function normalizeAnalysis(
 
     let observedObject =
         String(
-            data.observed_object || "unknown"
+            data.observed_object ||
+            "unknown"
         )
             .trim()
             .toLowerCase();
@@ -651,25 +862,24 @@ function normalizeAnalysis(
     // --------------------------------------------------
     // SAFETY NORMALIZATION
     // --------------------------------------------------
-    // If Qwen says the observed object is the same
-    // category as the claimed object but incorrectly
-    // returns object_match=false, use the actual
-    // observed object/category comparison.
-    // --------------------------------------------------
 
     if (
         observedObject !== "unknown" &&
-        String(claimedObject).toLowerCase() ===
-            observedObject
+        String(
+            claimedObject
+        ).toLowerCase() ===
+        observedObject
     ) {
 
-        objectMatch = true;
+        objectMatch =
+            true;
 
     }
 
     let damageType =
         String(
-            data.damage_type || "unknown"
+            data.damage_type ||
+            "unknown"
         )
             .trim()
             .toLowerCase();
@@ -680,14 +890,16 @@ function normalizeAnalysis(
 
     let severity =
         String(
-            data.severity || "unknown"
+            data.severity ||
+            "unknown"
         )
             .trim()
             .toLowerCase();
 
     let viewType =
         String(
-            data.view_type || "unknown"
+            data.view_type ||
+            "unknown"
         )
             .trim()
             .toLowerCase();
@@ -702,10 +914,13 @@ function normalizeAnalysis(
             "medium",
             "high",
             "unknown"
-        ].includes(severity)
+        ].includes(
+            severity
+        )
     ) {
 
-        severity = "unknown";
+        severity =
+            "unknown";
 
     }
 
@@ -718,10 +933,13 @@ function normalizeAnalysis(
             "overview",
             "close-up",
             "unknown"
-        ].includes(viewType)
+        ].includes(
+            viewType
+        )
     ) {
 
-        viewType = "unknown";
+        viewType =
+            "unknown";
 
     }
 
@@ -730,21 +948,33 @@ function normalizeAnalysis(
     // --------------------------------------------------
 
     let confidence =
-        typeof data.confidence === "number"
+        typeof data.confidence ===
+        "number"
             ? data.confidence
             : 0;
 
-    if (confidence < 0) {
-        confidence = 0;
+    if (
+        confidence < 0
+    ) {
+
+        confidence =
+            0;
+
     }
 
-    if (confidence > 1) {
-        confidence = 1;
+    if (
+        confidence > 1
+    ) {
+
+        confidence =
+            1;
+
     }
 
     return {
 
-        analysis_ok: true,
+        analysis_ok:
+            true,
 
         object_match:
             objectMatch,
@@ -753,7 +983,8 @@ function normalizeAnalysis(
             observedObject,
 
         damage_visible:
-            data.damage_visible === true,
+            data.damage_visible ===
+            true,
 
         damage_type:
             damageType,
@@ -786,29 +1017,44 @@ function getRequiredViews(
     claimObject
 ) {
 
-    if (claimObject === "car") {
+    if (
+        claimObject === "car"
+    ) {
 
         return [
+
             "vehicle overview",
+
             "damage close-up"
+
         ];
 
     }
 
-    if (claimObject === "laptop") {
+    if (
+        claimObject === "laptop"
+    ) {
 
         return [
+
             "laptop overview",
+
             "damaged area close-up"
+
         ];
 
     }
 
-    if (claimObject === "package") {
+    if (
+        claimObject === "package"
+    ) {
 
         return [
+
             "package overview",
+
             "damage close-up"
+
         ];
 
     }
@@ -826,12 +1072,18 @@ function getClaimedDamageType(
 ) {
 
     const text =
-        String(claimText)
+        String(
+            claimText
+        )
             .toLowerCase();
 
     if (
-        text.includes("scratch") ||
-        text.includes("scratched")
+        text.includes(
+            "scratch"
+        ) ||
+        text.includes(
+            "scratched"
+        )
     ) {
 
         return "scratch";
@@ -839,8 +1091,12 @@ function getClaimedDamageType(
     }
 
     if (
-        text.includes("dent") ||
-        text.includes("dented")
+        text.includes(
+            "dent"
+        ) ||
+        text.includes(
+            "dented"
+        )
     ) {
 
         return "dent";
@@ -848,8 +1104,12 @@ function getClaimedDamageType(
     }
 
     if (
-        text.includes("crack") ||
-        text.includes("cracked")
+        text.includes(
+            "crack"
+        ) ||
+        text.includes(
+            "cracked"
+        )
     ) {
 
         return "crack";
@@ -857,8 +1117,12 @@ function getClaimedDamageType(
     }
 
     if (
-        text.includes("broken") ||
-        text.includes("break")
+        text.includes(
+            "broken"
+        ) ||
+        text.includes(
+            "break"
+        )
     ) {
 
         return "broken";
@@ -866,8 +1130,12 @@ function getClaimedDamageType(
     }
 
     if (
-        text.includes("damage") ||
-        text.includes("damaged")
+        text.includes(
+            "damage"
+        ) ||
+        text.includes(
+            "damaged"
+        )
     ) {
 
         return "damage";
@@ -884,7 +1152,10 @@ function getClaimedDamageType(
 
 app.post(
     "/analyze",
-    upload.array("images", 10),
+    upload.array(
+        "images",
+        10
+    ),
     async (req, res) => {
 
         try {
@@ -898,7 +1169,9 @@ app.post(
                 "";
 
             const images =
-                Array.isArray(req.files)
+                Array.isArray(
+                    req.files
+                )
                     ? req.files
                     : [];
 
@@ -940,17 +1213,43 @@ app.post(
             );
 
             // --------------------------------------------------
+            // VALIDATE HF TOKEN
+            // --------------------------------------------------
+
+            if (
+                !process.env.HF_TOKEN
+            ) {
+
+                return res.status(
+                    500
+                ).json({
+
+                    success:
+                        false,
+
+                    error:
+                        "HF_TOKEN is not configured on the server."
+
+                });
+
+            }
+
+            // --------------------------------------------------
             // VALIDATE CLAIM
             // --------------------------------------------------
 
             if (
-                typeof claimText !== "string" ||
+                typeof claimText !==
+                    "string" ||
                 !claimText.trim()
             ) {
 
-                return res.status(400).json({
+                return res.status(
+                    400
+                ).json({
 
-                    success: false,
+                    success:
+                        false,
 
                     error:
                         "Claim conversation is required."
@@ -963,89 +1262,19 @@ app.post(
             // VALIDATE IMAGES
             // --------------------------------------------------
 
-            if (images.length === 0) {
+            if (
+                images.length === 0
+            ) {
 
-                return res.status(400).json({
+                return res.status(
+                    400
+                ).json({
 
-                    success: false,
+                    success:
+                        false,
 
                     error:
                         "At least one image is required."
-
-                });
-
-            }
-
-            // --------------------------------------------------
-            // CHECK OLLAMA
-            // --------------------------------------------------
-
-            try {
-
-                const ollamaCheck =
-                    await fetch(
-                        `${OLLAMA_URL}/api/tags`
-                    );
-
-                if (!ollamaCheck.ok) {
-
-                    throw new Error(
-                        `Ollama returned HTTP ${ollamaCheck.status}`
-                    );
-
-                }
-
-                const ollamaData =
-                    await ollamaCheck.json();
-
-                const models =
-                    (ollamaData.models || [])
-                        .map(
-                            model =>
-                                model.name
-                        );
-
-                console.log(
-                    "Available Ollama models:",
-                    models
-                );
-
-                if (
-                    !models.includes(
-                        OLLAMA_MODEL
-                    )
-                ) {
-
-                    return res.status(500).json({
-
-                        success: false,
-
-                        error:
-                            `Ollama model ${OLLAMA_MODEL} is not available.`,
-
-                        available_models:
-                            models
-
-                    });
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "Ollama health check failed:",
-                    error
-                );
-
-                return res.status(500).json({
-
-                    success: false,
-
-                    error:
-                        "Cannot connect to Ollama. Make sure Ollama is running.",
-
-                    details:
-                        error.message
 
                 });
 
@@ -1071,10 +1300,6 @@ app.post(
                 console.log(
                     `Analyzing image ${i + 1}/${images.length}...`
                 );
-
-                // --------------------------------------------------
-                // IMPORTANT PATH CHECK
-                // --------------------------------------------------
 
                 console.log(
                     "Original name:",
@@ -1109,7 +1334,8 @@ app.post(
                     image.path;
 
                 if (
-                    typeof imagePath !== "string" ||
+                    typeof imagePath !==
+                        "string" ||
                     imagePath.trim() === ""
                 ) {
 
@@ -1133,7 +1359,8 @@ app.post(
                 // --------------------------------------------------
 
                 if (
-                    typeof imagePath !== "string" ||
+                    typeof imagePath !==
+                        "string" ||
                     imagePath.trim() === ""
                 ) {
 
@@ -1197,7 +1424,8 @@ app.post(
 
             const riskFlags = [];
 
-            const supportingImageIds = [];
+            const supportingImageIds =
+                [];
 
             // --------------------------------------------------
             // SUCCESSFUL ANALYSES
@@ -1207,7 +1435,8 @@ app.post(
                 imageResults.filter(
                     image =>
                         image.analysis &&
-                        image.analysis.analysis_ok === true
+                        image.analysis.analysis_ok ===
+                            true
                 );
 
             // --------------------------------------------------
@@ -1218,7 +1447,8 @@ app.post(
                 imageResults.filter(
                     image =>
                         !image.analysis ||
-                        image.analysis.analysis_ok !== true
+                        image.analysis.analysis_ok !==
+                            true
                 );
 
             if (
@@ -1238,16 +1468,20 @@ app.post(
             const objectMatches =
                 analyzedImages.filter(
                     image =>
-                        image.analysis.object_match === true
+                        image.analysis.object_match ===
+                            true
                 );
 
             const objectMismatch =
                 analyzedImages.some(
                     image =>
-                        image.analysis.object_match === false
+                        image.analysis.object_match ===
+                            false
                 );
 
-            if (objectMismatch) {
+            if (
+                objectMismatch
+            ) {
 
                 riskFlags.push(
                     "object_mismatch"
@@ -1262,13 +1496,16 @@ app.post(
             const damageImages =
                 analyzedImages.filter(
                     image =>
-                        image.analysis.damage_visible === true
+                        image.analysis.damage_visible ===
+                            true
                 );
 
             const damageVisible =
                 damageImages.length > 0;
 
-            if (!damageVisible) {
+            if (
+                !damageVisible
+            ) {
 
                 riskFlags.push(
                     "damage_not_visibly_verified"
@@ -1311,16 +1548,27 @@ app.post(
                             image.analysis.damage_type;
 
                         return (
-                            claimedDamageType !== "unknown" &&
-                            detectedDamage !== "unknown" &&
-                            detectedDamage !== "none" &&
-                            detectedDamage !== claimedDamageType
+
+                            claimedDamageType !==
+                                "unknown" &&
+
+                            detectedDamage !==
+                                "unknown" &&
+
+                            detectedDamage !==
+                                "none" &&
+
+                            detectedDamage !==
+                                claimedDamageType
+
                         );
 
                     }
                 );
 
-            if (differentDamage) {
+            if (
+                differentDamage
+            ) {
 
                 riskFlags.push(
                     "damage_type_mismatch"
@@ -1332,7 +1580,8 @@ app.post(
             // DETERMINE SEVERITY
             // --------------------------------------------------
 
-            let severity = "unknown";
+            let severity =
+                "unknown";
 
             const severityValues =
                 damageImages
@@ -1346,26 +1595,37 @@ app.post(
                                 "low",
                                 "medium",
                                 "high"
-                            ].includes(value)
+                            ].includes(
+                                value
+                            )
                     );
 
             if (
-                severityValues.includes("high")
+                severityValues.includes(
+                    "high"
+                )
             ) {
 
-                severity = "high";
+                severity =
+                    "high";
 
             } else if (
-                severityValues.includes("medium")
+                severityValues.includes(
+                    "medium"
+                )
             ) {
 
-                severity = "medium";
+                severity =
+                    "medium";
 
             } else if (
-                severityValues.includes("low")
+                severityValues.includes(
+                    "low"
+                )
             ) {
 
-                severity = "low";
+                severity =
+                    "low";
 
             }
 
@@ -1411,14 +1671,23 @@ app.post(
                 false;
 
             if (
-                analyzedImages.length >= 2 &&
-                objectMatches.length > 0 &&
+
+                analyzedImages.length >=
+                    2 &&
+
+                objectMatches.length >
+                    0 &&
+
                 damageVisible &&
+
                 hasOverview &&
+
                 hasCloseup
+
             ) {
 
-                evidenceStandardMet = true;
+                evidenceStandardMet =
+                    true;
 
             }
 
@@ -1427,8 +1696,15 @@ app.post(
             // --------------------------------------------------
 
             if (
-                images.length >= 2 &&
-                (!hasOverview || !hasCloseup)
+
+                images.length >=
+                    2 &&
+
+                (
+                    !hasOverview ||
+                    !hasCloseup
+                )
+
             ) {
 
                 riskFlags.push(
@@ -1460,14 +1736,15 @@ app.post(
             // --------------------------------------------------
 
             if (
-                analyzedImages.length === 0
+                analyzedImages.length ===
+                    0
             ) {
 
                 claimStatus =
                     "not_enough_information";
 
                 justification =
-                    "The uploaded images could not be analyzed by the local vision model.";
+                    "The uploaded images could not be analyzed by the vision model.";
 
             }
 
@@ -1529,7 +1806,8 @@ app.post(
 
             const result = {
 
-                success: true,
+                success:
+                    true,
 
                 evidence_standard_met:
                     evidenceStandardMet,
@@ -1541,7 +1819,9 @@ app.post(
 
                 risk_flags:
                     [
-                        ...new Set(riskFlags)
+                        ...new Set(
+                            riskFlags
+                        )
                     ],
 
                 issue_type:
@@ -1564,7 +1844,8 @@ app.post(
                     supportingImageIds,
 
                 valid_image:
-                    objectMatches.length > 0,
+                    objectMatches.length >
+                    0,
 
                 severity:
                     severity,
@@ -1582,7 +1863,7 @@ app.post(
                     true,
 
                 vision_model:
-                    OLLAMA_MODEL
+                    HF_MODEL
 
             };
 
@@ -1638,9 +1919,12 @@ app.post(
 
             console.error("");
 
-            return res.status(500).json({
+            return res.status(
+                500
+            ).json({
 
-                success: false,
+                success:
+                    false,
 
                 error:
                     error.message ||
@@ -1659,7 +1943,9 @@ app.post(
 
 app.use(
     "/uploads",
-    express.static(uploadDir)
+    express.static(
+        uploadDir
+    )
 );
 
 // ======================================================
@@ -1667,16 +1953,24 @@ app.use(
 // ======================================================
 
 app.use(
-    (error, req, res, next) => {
+    (
+        error,
+        req,
+        res,
+        next
+    ) => {
 
         console.error(
             "SERVER ERROR:",
             error
         );
 
-        res.status(400).json({
+        res.status(
+            400
+        ).json({
 
-            success: false,
+            success:
+                false,
 
             error:
                 error.message ||
@@ -1692,7 +1986,10 @@ app.use(
 // ======================================================
 
 const server =
-    app.listen(PORT, "0.0.0.0", () => {
+    app.listen(
+        PORT,
+        "0.0.0.0",
+        () => {
 
             console.log("");
 
@@ -1709,19 +2006,19 @@ const server =
             );
 
             console.log(
-                ` Server: http://127.0.0.1:${PORT}`
+                ` Server running on port ${PORT}`
             );
 
             console.log(
-                ` Analyze: http://127.0.0.1:${PORT}/analyze`
+                ` Analyze endpoint: /analyze`
             );
 
             console.log(
-                ` Ollama: ${OLLAMA_URL}`
+                ` Vision Provider: Hugging Face`
             );
 
             console.log(
-                ` Vision Model: ${OLLAMA_MODEL}`
+                ` Vision Model: ${HF_MODEL}`
             );
 
             console.log(
@@ -1762,7 +2059,8 @@ server.on(
         );
 
         if (
-            error.code === "EADDRINUSE"
+            error.code ===
+            "EADDRINUSE"
         ) {
 
             console.error(
